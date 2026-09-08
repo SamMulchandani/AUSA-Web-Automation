@@ -5,7 +5,7 @@ import gspread
 import google.auth
 from flask import Flask, render_template, request, jsonify
 
-app = Flask(__name__, template_folder='.')
+app = Flask(__name__, template_folder='src')
 
 # Authenticate with Google Sheets using Cloud Run's built-in Service Account
 SCOPES = [
