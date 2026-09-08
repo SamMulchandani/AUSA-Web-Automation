@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Podbean Data Uploader</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background-color: #f4f4f9; padding: 2rem; display: flex; justify-content: center; }
+    .upload-container { background: white; border: 2px dashed #ccc; padding: 2rem; text-align: center; border-radius: 8px; width: 100%; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 15px; font-size: 16px; width: 100%; }
+    .btn:hover { background: #0056b3; }
+    #status { margin-top: 15px; font-weight: bold; }
+    input[type="file"] { margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <div class="upload-container">
+    <h2>Upload Podbean CSV</h2>
+    <form id="uploadForm">
+      <input type="file" id="csvFile" accept=".csv" required />
+      <br />
+      <button type="submit" class="btn">Upload and Process</button>
+    </form>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fileInput = document.getElementById('csvFile');
+      const statusDiv = document.getElementById('status');
+      
+      if (fileInput.files.length === 0) {
+        statusDiv.textContent = 'Please select a CSV file.';
+        statusDiv.style.color = 'red';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      statusDiv.textContent = 'Uploading to processor...';
+      statusDiv.style.color = 'black';
+
+      try {
+        // Replace '/api/upload-csv' with your actual backend endpoint URL
+        const response = await fetch('/api/upload-csv', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          statusDiv.textContent = 'Upload successful! Sending data to Google Sheets.';
+          statusDiv.style.color = 'green';
+          fileInput.value = ''; // Clear the form
+        } else {
+          statusDiv.textContent = 'Upload failed. Please check the backend.';
+          statusDiv.style.color = 'red';
+        }
+      } catch (error) {
+        statusDiv.textContent = 'Network error. Could not reach the server.';
+        statusDiv.style.color = 'red';
+      }
+    });
+  </script>
+</body>
+</html>
