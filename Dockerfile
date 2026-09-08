@@ -1,8 +1,10 @@
-FROM nginx:1.27-alpine
+FROM python:3.11-slim
 
-COPY src/ /usr/share/nginx/html/
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
-EXPOSE 8080
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["/bin/sh", "-c", "envsubst '$PORT' < /etc/nginx/conf.d/default.conf > /tmp/default.conf && mv /tmp/default.conf /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+COPY . .
+
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
