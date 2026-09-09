@@ -1,7 +1,7 @@
 import os
 import io
 import pandas as pd
-from sheets_sync import append
+from src.sheets_sync import append
 import json
 from flask import Flask, render_template, request, jsonify
 
