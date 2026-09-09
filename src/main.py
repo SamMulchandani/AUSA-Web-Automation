@@ -1,22 +1,15 @@
 import os
 import io
 import pandas as pd
-import gspread
-import google.auth
+from sheets_sync import append
 import json
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
-# Authenticate with Google Sheets using Cloud Run's built-in Service Account
-SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/drive'
-]
 
-def get_sheets_client():
-    credentials, project = google.auth.default(scopes=SCOPES)
-    return gspread.authorize(credentials)
+
+
 
 @app.route('/', methods=['GET'])
 def index():
@@ -38,40 +31,72 @@ def upload_csv():
         df = df.fillna('')
 
         json_data = df.to_dict(orient='records')
-        print(json.dumps(json_data,indent=2))
-        # ==========================================
-        # YOUR CUSTOM PROCESSING LOGIC GOES HERE
-        # Example: 
-        # for row in json_data:
-        #     if row.get('Episode title') == 'Target Episode':
-        #         # do something
-        # ==========================================
+        # print(json.dumps(json_data,indent=2))
+        
+        from datetime import datetime, timedelta
 
-        # Returning the parsed data back to the frontend so you can verify it worked
-        return jsonify({
-            "message": "Successfully converted CSV to JSON object",
-            "row_count": len(json_data),
-            "data": json_data 
-        }), 200
+# 1. Establish the 1st of the current month as the anchor point
+        today = datetime.now()
+        first_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # 2. Define time windows looking backward from the 1st of the month
+        seven_days_prior = first_of_month - timedelta(days=7)
+        thirty_days_prior = first_of_month - timedelta(days=30)
+
+        # 3. Initialize counters
+        downloads_all_time = 0
+        downloads_past_30_days = 0
+        downloads_past_7_days = 0
+
+        # 4. Loop through the parsed JSON rows
+        for row in json_data:
+            # Get the date string from the 'Release Date' column
+            date_str = str(row.get('Release Date', '')).strip()
+
+            if not date_str:
+                continue
+
+            try:
+                # Parse 'YYYY-MM-DD' (e.g., '2026-08-26')
+                release_date = datetime.strptime(date_str, '%Y-%m-%d')
+
+                # Increment All-Time total
+                downloads_all_time += row.get("Downloads")
+
+                # Count if date falls within the 30-day window before the 1st
+                if thirty_days_prior <= release_date < first_of_month:
+                    downloads_past_30_days += row.get("Downloads")
+
+                # Count if date falls within the 7-day window before the 1st
+                if seven_days_prior <= release_date < first_of_month:
+                    downloads_past_7_days += row.get("Downloads")
+
+            except ValueError:
+                # Skip rows with missing or invalid date strings
+                continue
+
+        # Summary metrics dictionary ready for your Google Sheet pipeline
+            summary_metrics = {
+                "downloads_all_time": downloads_all_time,
+                "downloads_past_30_days": downloads_past_30_days,
+                "downloads_past_7_days": downloads_past_7_days
+            }
+
+            # sync to google sheets
+            append(summary_metrics)
+
+            return jsonify({
+                "message": "Successfully converted CSV to JSON object",
+                "row_count": len(json_data),
+                "data": json_data 
+            }), 200
 
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-        # 2. Connect to Google Sheets
-    #     gc = get_sheets_client()
         
-    #     # Replace with your actual Google Sheet ID (from the sheet URL)
-    #     SHEET_ID = "10_pz7I2u27s-eTKsatJDAbuZ6QnEpJTF9ZPAq2vk_EA"
-    #     WORKSHEET_NAME = "Podbean"
-    #     sheet = gc.open_by_key(SHEET_ID).worksheet(WORKSHEET_NAME)  # or specify worksheet name
-
-    #     # 3. Append data to the Google Sheet
-    #     values = df.values.tolist()
-    #     sheet.append_rows(values, value_input_option='USER_ENTERED')
-
-    #     return jsonify({"message": "Successfully appended data to Google Sheet"}), 200
 
     # except Exception as e:
     #     return jsonify({"error": str(e)}), 500
