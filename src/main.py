@@ -3,6 +3,7 @@ import io
 import pandas as pd
 import gspread
 import google.auth
+import json
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
@@ -36,22 +37,44 @@ def upload_csv():
         # Replace NaN values with empty strings for JSON compatibility
         df = df.fillna('')
 
-        # 2. Connect to Google Sheets
-        gc = get_sheets_client()
-        
-        # Replace with your actual Google Sheet ID (from the sheet URL)
-        SHEET_ID = "10_pz7I2u27s-eTKsatJDAbuZ6QnEpJTF9ZPAq2vk_EA"
-        WORKSHEET_NAME = "Podbean"
-        sheet = gc.open_by_key(SHEET_ID).worksheet(WORKSHEET_NAME)  # or specify worksheet name
+        json_data = df.to_dict(orient='records')
+        print(json.dumps(json_data,indent=2))
+        # ==========================================
+        # YOUR CUSTOM PROCESSING LOGIC GOES HERE
+        # Example: 
+        # for row in json_data:
+        #     if row.get('Episode title') == 'Target Episode':
+        #         # do something
+        # ==========================================
 
-        # 3. Append data to the Google Sheet
-        values = df.values.tolist()
-        sheet.append_rows(values, value_input_option='USER_ENTERED')
+        # Returning the parsed data back to the frontend so you can verify it worked
+        return jsonify({
+            "message": "Successfully converted CSV to JSON object",
+            "row_count": len(json_data),
+            "data": json_data 
+        }), 200
 
-        return jsonify({"message": "Successfully appended data to Google Sheet"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+        # 2. Connect to Google Sheets
+    #     gc = get_sheets_client()
+        
+    #     # Replace with your actual Google Sheet ID (from the sheet URL)
+    #     SHEET_ID = "10_pz7I2u27s-eTKsatJDAbuZ6QnEpJTF9ZPAq2vk_EA"
+    #     WORKSHEET_NAME = "Podbean"
+    #     sheet = gc.open_by_key(SHEET_ID).worksheet(WORKSHEET_NAME)  # or specify worksheet name
+
+    #     # 3. Append data to the Google Sheet
+    #     values = df.values.tolist()
+    #     sheet.append_rows(values, value_input_option='USER_ENTERED')
+
+    #     return jsonify({"message": "Successfully appended data to Google Sheet"}), 200
+
+    # except Exception as e:
+    #     return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
