@@ -40,8 +40,9 @@ def upload_csv():
         gc = get_sheets_client()
         
         # Replace with your actual Google Sheet ID (from the sheet URL)
-        SHEET_ID = "YOUR_GOOGLE_SHEET_ID_HERE"
-        sheet = gc.open_by_key(SHEET_ID).sheet1  # or specify worksheet name
+        SHEET_ID = "10_pz7I2u27s-eTKsatJDAbuZ6QnEpJTF9ZPAq2vk_EA"
+        WORKSHEET_NAME = "Podbean"
+        sheet = gc.open_by_key(SHEET_ID).worksheet(WORKSHEET_NAME)  # or specify worksheet name
 
         # 3. Append data to the Google Sheet
         values = df.values.tolist()
