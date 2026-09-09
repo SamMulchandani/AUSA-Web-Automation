@@ -6,20 +6,37 @@
   <title>Podbean Data Uploader</title>
   <style>
     body { font-family: system-ui, sans-serif; background-color: #f4f4f9; padding: 2rem; display: flex; justify-content: center; }
-    .upload-container { background: white; border: 2px dashed #ccc; padding: 2rem; text-align: center; border-radius: 8px; width: 100%; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 15px; font-size: 16px; width: 100%; }
+    .upload-container { background: white; border: 2px dashed #ccc; padding: 2rem; text-align: left; border-radius: 8px; width: 100%; max-width: 450px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .upload-container h2 { text-align: center; margin-top: 0; }
+    .btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 20px; font-size: 16px; width: 100%; }
     .btn:hover { background: #0056b3; }
-    #status { margin-top: 15px; font-weight: bold; }
-    input[type="file"] { margin-top: 10px; }
+    #status { margin-top: 15px; font-weight: bold; text-align: center; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 5px; }
+    input[type="file"] { width: 100%; }
   </style>
 </head>
 <body>
 
   <div class="upload-container">
-    <h2>Upload Podbean CSV</h2>
+    <h2>Upload Podbean CSVs</h2>
     <form id="uploadForm">
-      <input type="file" id="csvFile" accept=".csv" required />
-      <br />
+      
+      <div class="form-group">
+        <label>Monthly Download Report:</label>
+        <input type="file" id="monthlyFile" accept=".csv" required />
+      </div>
+      
+      <div class="form-group">
+        <label>7-Day Post Upload Report:</label>
+        <input type="file" id="sevenDayFile" accept=".csv" required />
+      </div>
+      
+      <div class="form-group">
+        <label>All-Time Download Report:</label>
+        <input type="file" id="allTimeFile" accept=".csv" required />
+      </div>
+
       <button type="submit" class="btn">Upload and Process</button>
     </form>
     <div id="status"></div>
@@ -28,33 +45,38 @@
   <script>
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const fileInput = document.getElementById('csvFile');
+      
+      const monthlyInput = document.getElementById('monthlyFile');
+      const sevenDayInput = document.getElementById('sevenDayFile');
+      const allTimeInput = document.getElementById('allTimeFile');
       const statusDiv = document.getElementById('status');
       
-      if (fileInput.files.length === 0) {
-        statusDiv.textContent = 'Please select a CSV file.';
+      // Ensure all files are selected
+      if (!monthlyInput.files[0] || !sevenDayInput.files[0] || !allTimeInput.files[0]) {
+        statusDiv.textContent = 'Please select all three CSV files.';
         statusDiv.style.color = 'red';
         return;
       }
 
+      // Bundle all files into the FormData object
       const formData = new FormData();
-      formData.append('file', fileInput.files[0]);
+      formData.append('monthly', monthlyInput.files[0]);
+      formData.append('sevenDay', sevenDayInput.files[0]);
+      formData.append('allTime', allTimeInput.files[0]);
 
-      statusDiv.textContent = 'Uploading to processor...';
+      statusDiv.textContent = 'Processing files...';
       statusDiv.style.color = 'black';
 
       try {
-        // Replace '/api/upload-csv' with your actual backend endpoint URL
         const response = await fetch('/api/upload-csv', {
           method: 'POST',
           body: formData
         });
 
-
         if (response.ok) {
-          statusDiv.textContent = 'Upload successful! Sending data to Google Sheets.';
+          statusDiv.textContent = 'Upload successful! Data sent to Google Sheets.';
           statusDiv.style.color = 'green';
-          fileInput.value = ''; // Clear the form
+          document.getElementById('uploadForm').reset(); // Clear the form on success
         } else {
           statusDiv.textContent = 'Upload failed. Please check the backend.';
           statusDiv.style.color = 'red';

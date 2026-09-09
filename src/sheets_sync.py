@@ -1,6 +1,6 @@
 import gspread
 import google.auth
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 # Authenticate with Google Sheets using Cloud Run's built-in Service Account
@@ -22,11 +22,14 @@ def append(metrics):
     sheet = gc.open_by_key(SHEET_ID).worksheet(WORKSHEET_NAME)  # or specify worksheet name
 
     # 3. Append data to the Google Sheet
-    date = datetime.now().strftime("%B %Y")
+    date = datetime.now()
+    first_of_this_month = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last_month = (first_of_this_month - timedelta(days=1)).strftime("%B %Y")
+
     
     sheet.append_row([
-        date,
-        metrics["downloads_past_7_days"],
-        metrics["downloads_past_30_days"],
+        last_month,
+        metrics["downloads_7_days"],
+        metrics["downloads_30_days"],
         metrics["downloads_all_time"],
     ])

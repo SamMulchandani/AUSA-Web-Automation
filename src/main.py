@@ -1,110 +1,103 @@
 import os
-import io
 import pandas as pd
-from src.sheets_sync import append
-import json
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
+
+# Import the append logic directly from your sync file
+from src.sheets_sync import append
 
 app = Flask(__name__)
 
-
 @app.route('/', methods=['GET'])
 def index():
-    # Serves the index.html template from the same directory
     return render_template('index.html')
 
 @app.route('/api/upload-csv', methods=['POST'])
 def upload_csv():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
-    
-    file = request.files['file']
-    
     try:
-        # 1. Parse CSV into DataFrame
-        df = pd.read_csv(file)
-        
-        # Replace NaN values with empty strings for JSON compatibility
-        df = df.fillna('')
+        # Get uploaded files from the multipart form request
+        monthly_file = request.files.get('monthly')
+        seven_day_file = request.files.get('sevenDay')
+        all_time_file = request.files.get('allTime')
 
-        json_data = df.to_dict(orient='records')
-        # print(json.dumps(json_data,indent=2))
-        
-        from datetime import datetime, timedelta
+        if not all([monthly_file, seven_day_file, all_time_file]):
+            return jsonify({"error": "Missing one or more required CSV files."}), 400
 
-# 1. Establish the 1st of the current month as the anchor point
         today = datetime.now()
-        first_of_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-        # 2. Define time windows looking backward from the 1st of the month
-        seven_days_prior = first_of_month - timedelta(days=7)
-        thirty_days_prior = first_of_month - timedelta(days=30)
+        # ---------------------------------------------------------
+        # 1. Process Monthly Report
+        # Output: The sum of all downloads in the file.
+        # ---------------------------------------------------------
+        df_monthly = pd.read_csv(monthly_file)
+        monthly_total = 0
+        if 'Downloads' in df_monthly.columns:
+            monthly_total = pd.to_numeric(
+                df_monthly['Downloads'].astype(str).str.replace(',', '', regex=False), errors='coerce'
+            ).sum()
 
-        # 3. Initialize counters
-        downloads_all_time = 0
-        downloads_past_30_days = 0
-        downloads_past_7_days = 0
+        # ---------------------------------------------------------
+        # 2. Process 7-Day Report
+        # Output: The average of 7-day downloads from podcasts posted in the PREVIOUS month.
+        # ---------------------------------------------------------
+        df_7day = pd.read_csv(seven_day_file)
+        seven_day_avg = 0
+        if 'Release Date' in df_7day.columns and 'Downloads' in df_7day.columns:
+            # Parse dates and numeric downloads
+            df_7day['Release Date'] = pd.to_datetime(df_7day['Release Date'], errors='coerce')
+            df_7day['Downloads'] = pd.to_numeric(
+                df_7day['Downloads'].astype(str).str.replace(',', '', regex=False), errors='coerce'
+            )
 
-        # 4. Loop through the parsed JSON rows
-        for row in json_data:
-            # Get the date string from the 'Release Date' column
-            date_str = str(row.get('Release Date', '')).strip()
+            # Calculate previous month boundaries
+            first_of_this_month = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            last_month_end = first_of_this_month - timedelta(days=1)
+            first_of_last_month = last_month_end.replace(day=1)
 
-            if not date_str:
-                continue
+            # Filter rows for releases in the previous month and calculate the average
+            last_month_episodes = df_7day[
+                (df_7day['Release Date'] >= first_of_last_month) & 
+                (df_7day['Release Date'] < first_of_this_month)
+            ]
 
-            try:
-                # Parse 'YYYY-MM-DD' (e.g., '2026-08-26')
-                release_date = datetime.strptime(date_str, '%Y-%m-%d')
-            except ValueError:
-                # Skip rows with missing or invalid date strings
-                continue
+            if not last_month_episodes.empty:
+                seven_day_avg = last_month_episodes['Downloads'].mean()
 
-            # Safely coerce Downloads to a number; treat missing/blank as 0
-            raw_downloads = row.get("Downloads", 0)
-            if isinstance(raw_downloads, str):
-                raw_downloads = raw_downloads.replace(",", "").strip()
-            try:
-                downloads = int(float(raw_downloads)) if raw_downloads not in ("", None) else 0
-            except (ValueError, TypeError):
-                downloads = 0
+        # ---------------------------------------------------------
+        # 3. Process All-Time Report
+        # Output: Downloads from THIS YEAR (e.g., 2026).
+        # ---------------------------------------------------------
+        df_all_time = pd.read_csv(all_time_file)
+        all_time_this_year = 0
+        if 'Date' in df_all_time.columns and 'Downloads' in df_all_time.columns:
+            current_year_str = str(today.year)
+            
+            # Find the row corresponding to the current year
+            this_year_row = df_all_time[df_all_time['Date'].astype(str) == current_year_str]
+            if not this_year_row.empty:
+                all_time_this_year = pd.to_numeric(
+                    this_year_row['Downloads'].astype(str).str.replace(',', '', regex=False), errors='coerce'
+                ).sum()
 
-            # Increment All-Time total
-            downloads_all_time += downloads
-
-            # Count if date falls within the 30-day window before the 1st
-            if thirty_days_prior <= release_date < first_of_month:
-                downloads_past_30_days += downloads
-
-            # Count if date falls within the 7-day window before the 1st
-            if seven_days_prior <= release_date < first_of_month:
-                downloads_past_7_days += downloads
-
-        # Summary metrics dictionary ready for your Google Sheet pipeline
+        # ---------------------------------------------------------
+        # Compile Metrics and Push to Sheets
+        # ---------------------------------------------------------
         summary_metrics = {
-            "downloads_all_time": downloads_all_time,
-            "downloads_past_30_days": downloads_past_30_days,
-            "downloads_past_7_days": downloads_past_7_days
+            "downloads_7_days": int(seven_day_avg) if not pd.isna(seven_day_avg) else 0,
+            "downloads_30_days": int(monthly_total) if not pd.isna(monthly_total) else 0,
+            "downloads_all_time": int(all_time_this_year) if not pd.isna(all_time_this_year) else 0
         }
 
-        # sync to google sheets
+        # Sync to Google Sheets
         append(summary_metrics)
 
         return jsonify({
-            "message": "Successfully converted CSV to JSON object",
-            "row_count": len(json_data),
-            "data": json_data
+            "message": "Successfully processed files and synced to Google Sheets",
+            "data": summary_metrics
         }), 200
-
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-        
-
-    # except Exception as e:
-    #     return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
