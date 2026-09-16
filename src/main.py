@@ -68,16 +68,12 @@ def upload_csv():
         # Output: Downloads from THIS YEAR (e.g., 2026).
         # ---------------------------------------------------------
         df_all_time = pd.read_csv(all_time_file)
-        all_time_this_year = 0
-        if 'Date' in df_all_time.columns and 'Downloads' in df_all_time.columns:
-            current_year_str = str(today.year)
-            
-            # Find the row corresponding to the current year
-            this_year_row = df_all_time[df_all_time['Date'].astype(str) == current_year_str]
-            if not this_year_row.empty:
-                all_time_this_year = pd.to_numeric(
-                    this_year_row['Downloads'].astype(str).str.replace(',', '', regex=False), errors='coerce'
-                ).sum()
+        all_time_total = 0
+        if 'Downloads' in df_all_time.columns:
+            all_time_total = pd.to_numeric(
+                df_all_time['Downloads'].astype(str).str.replace(',', '', regex=False), errors='coerce'
+            ).sum()
+
 
         # ---------------------------------------------------------
         # Compile Metrics and Push to Sheets
@@ -85,7 +81,7 @@ def upload_csv():
         summary_metrics = {
             "downloads_7_days": int(seven_day_avg) if not pd.isna(seven_day_avg) else 0,
             "downloads_30_days": int(monthly_total) if not pd.isna(monthly_total) else 0,
-            "downloads_all_time": int(all_time_this_year) if not pd.isna(all_time_this_year) else 0
+            "downloads_all_time": int(all_time_total) if not pd.isna(all_time_total) else 0
         }
 
         # Sync to Google Sheets
